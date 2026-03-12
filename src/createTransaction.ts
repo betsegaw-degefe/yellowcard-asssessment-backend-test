@@ -124,12 +124,7 @@ export async function handler(event: APIGatewayProxyEventV2) {
       status: tx.status,
     });
 
-    return json(201, {
-      id: tx.id,
-      status: tx.status,
-      createdAt: tx.createdAt,
-      updatedAt: tx.updatedAt,
-    });
+    return json(201, tx);
   } catch (err: unknown) {
     if (err instanceof ConditionalCheckFailedException) {
       const body = event.body ? JSON.parse(event.body) : {};

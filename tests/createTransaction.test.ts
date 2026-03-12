@@ -67,7 +67,7 @@ describe("createTransaction handler", () => {
   });
 
   describe("successful transaction creation", () => {
-    it("should return HTTP 201 with transaction details", async () => {
+    it("should return HTTP 201 with full transaction object", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createEvent({
@@ -82,6 +82,9 @@ describe("createTransaction handler", () => {
 
       const body = JSON.parse(response.body);
       expect(body.id).toBeDefined();
+      expect(body.amount).toBe(100);
+      expect(body.currency).toBe("USD");
+      expect(body.reference).toBe("external-tx-123");
       expect(body.status).toBe("PENDING");
       expect(body.createdAt).toBeDefined();
       expect(body.updatedAt).toBeDefined();
