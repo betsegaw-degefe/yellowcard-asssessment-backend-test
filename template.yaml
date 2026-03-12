@@ -83,6 +83,33 @@ Resources:
             Path: /transactions
             Method: POST
 
+  GetTransactionFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/getTransaction.ts
+    Properties:
+      Handler: getTransaction.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt TransactionsTable.Arn
+      Events:
+        GetTransaction:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /transactions/{id}
+            Method: GET
+
 Outputs:
   ApiBaseUrl:
     Description: Base URL of the API Gateway endpoint
