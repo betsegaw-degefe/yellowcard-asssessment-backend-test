@@ -1,32 +1,120 @@
-import { PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { v4 as uuidv4 } from "uuid";
+import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { v5 as uuidv5 } from "uuid";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { ddbDoc, TABLE_NAME, json } from "./shared";
 
+const NAMESPACE = "a5b1c9d2-4e6a-4a7c-bc1d-8c2f5a0b3d44";
+
+const TransactionStatus = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+} as const;
+
+interface CreateTransactionRequest {
+  amount: number;
+  currency?: string;
+  reference: string;
+}
+
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
+function validateRequest(body: unknown): { data?: CreateTransactionRequest; errors?: ValidationError[] } {
+  const errors: ValidationError[] = [];
+
+  if (!body || typeof body !== "object") {
+    return { errors: [{ field: "body", message: "Request body is required" }] };
+  }
+
+  const { amount, currency, reference } = body as Record<string, unknown>;
+
+  if (amount === undefined || amount === null) {
+    errors.push({ field: "amount", message: "amount is required" });
+  } else if (typeof amount !== "number" || !Number.isFinite(amount)) {
+    errors.push({ field: "amount", message: "amount must be a valid number" });
+  } else if (amount <= 0) {
+    errors.push({ field: "amount", message: "amount must be a positive number" });
+  }
+
+  if (reference === undefined || reference === null) {
+    errors.push({ field: "reference", message: "reference is required" });
+  } else if (typeof reference !== "string" || reference.trim() === "") {
+    errors.push({ field: "reference", message: "reference must be a non-empty string" });
+  }
+
+  if (currency !== undefined && currency !== null) {
+    if (typeof currency !== "string" || currency.trim() === "") {
+      errors.push({ field: "currency", message: "currency must be a non-empty string" });
+    }
+  }
+
+  if (errors.length > 0) {
+    return { errors };
+  }
+
+  return {
+    data: {
+      amount: amount as number,
+      currency: (currency as string) || "USD",
+      reference: (reference as string).trim(),
+    },
+  };
+}
 
 export async function handler(event: APIGatewayProxyEventV2) {
   try {
-    const body = event.body ? JSON.parse(event.body) : {};
+    let body: unknown;
+    try {
+      body = event.body ? JSON.parse(event.body) : null;
+    } catch {
+      return json(400, { error: "InvalidJSON", message: "Request body must be valid JSON" });
+    }
+
+    const validation = validateRequest(body);
+    if (validation.errors) {
+      return json(400, { error: "ValidationError", details: validation.errors });
+    }
+
+    const { amount, currency, reference } = validation.data!;
+    const now = new Date().toISOString();
 
     const tx = {
-      id: uuidv4(),
-      amount: body.data.amount,
-      currency: body.data.currency,
-      reference: body.data.reference,
-      createdAt: new Date().toISOString(),
+      id: uuidv5(reference, NAMESPACE),
+      reference,
+      amount,
+      currency,
+      status: TransactionStatus.PENDING,
+      createdAt: now,
+      updatedAt: now,
     };
 
-    await ddbDoc.send(new PutCommand({
-      TableName: TABLE_NAME,
-      Item: tx,
-      ConditionExpression: "attribute_not_exists(id)",
-    }));
+    await ddbDoc.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: tx,
+        ConditionExpression: "attribute_not_exists(id)",
+      })
+    );
 
     console.log("Transaction Created", JSON.stringify({ type: "TransactionCreated", payload: tx }));
 
-    return json(201, tx);
-  } catch (err: any) {
+    return json(201, {
+      id: tx.id,
+      status: tx.status,
+      createdAt: tx.createdAt,
+      updatedAt: tx.updatedAt,
+    });
+  } catch (err: unknown) {
+    if (err instanceof ConditionalCheckFailedException) {
+      return json(409, { error: "Conflict", message: "Transaction already exists" });
+    }
+
     console.error("createTransaction error", err);
-    return json(500, { error: "InternalError" });
+    return json(500, { error: "InternalError", message: "An unexpected error occurred" });
   }
 }

@@ -56,6 +56,28 @@ Resources:
             Path: /health
             Method: GET
 
+  CreateTransactionFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/createTransaction.ts
+    Properties:
+      Handler: createTransaction.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TransactionsTable
+      Events:
+        CreateTransaction:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /transactions
+            Method: POST
 
 Outputs:
   ApiBaseUrl:
