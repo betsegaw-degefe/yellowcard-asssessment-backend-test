@@ -2,7 +2,7 @@ services:
   localstack:
     image: localstack/localstack:3
     environment:
-      - SERVICES=cloudformation,apigateway,lambda,dynamodb,s3,iam,logs,sts
+      - SERVICES=cloudformation,apigateway,lambda,dynamodb,s3,iam,logs,sts,sqs,sns,events
       - DEBUG=0
       - AWS_DEFAULT_REGION=us-east-1
     ports:

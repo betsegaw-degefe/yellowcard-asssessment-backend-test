@@ -9,6 +9,12 @@ jest.unstable_mockModule("../src/shared", () => ({
     send: mockSend,
   },
   TABLE_NAME: "transactions",
+  TransactionStatus: {
+    PENDING: "PENDING",
+    PROCESSING: "PROCESSING",
+    COMPLETED: "COMPLETED",
+    FAILED: "FAILED",
+  },
   json: (statusCode: number, body: unknown) => ({
     statusCode,
     headers: {

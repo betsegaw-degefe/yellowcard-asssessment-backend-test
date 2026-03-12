@@ -2,16 +2,9 @@ import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import { v5 as uuidv5 } from "uuid";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { ddbDoc, TABLE_NAME, json } from "./shared";
+import { ddbDoc, TABLE_NAME, json, TransactionStatus } from "./shared";
 
 const NAMESPACE = "a5b1c9d2-4e6a-4a7c-bc1d-8c2f5a0b3d44";
-
-const TransactionStatus = {
-  PENDING: "PENDING",
-  PROCESSING: "PROCESSING",
-  COMPLETED: "COMPLETED",
-  FAILED: "FAILED",
-} as const;
 
 interface CreateTransactionRequest {
   amount: number;

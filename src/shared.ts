@@ -1,7 +1,30 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { SNSClient } from "@aws-sdk/client-sns";
 
 export const TABLE_NAME = process.env.TABLE_NAME ?? "transactions";
+export const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN ?? "";
+
+export const TransactionStatus = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+} as const;
+
+export type TransactionStatusType = (typeof TransactionStatus)[keyof typeof TransactionStatus];
+
+export const PUBLISHABLE_STATUSES: readonly string[] = [
+  TransactionStatus.PENDING,
+  TransactionStatus.PROCESSING,
+];
+
+export interface TransactionMessage {
+  id: string;
+  status: string;
+  amount: number;
+  reference: string;
+}
 
 /**
  * LocalStack endpoint support:
@@ -21,6 +44,20 @@ function getClient(): DynamoDBDocumentClient {
 }
 
 export const ddbDoc = getClient();
+
+function getSNSClient(): SNSClient {
+  const endpoint = process.env.AWS_ENDPOINT_URL;
+  return new SNSClient({
+    endpoint,
+    region: process.env.AWS_DEFAULT_REGION ?? "us-east-1",
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "test",
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "test",
+    },
+  });
+}
+
+export const snsClient = getSNSClient();
 
 export function json(statusCode: number, body: unknown) {
   return {

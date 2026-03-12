@@ -34,6 +34,8 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
 
 
   HealthCheckFunction:
@@ -109,6 +111,177 @@ Resources:
             RestApiId: !Ref Api
             Path: /transactions/{id}
             Method: GET
+
+  # SNS Topic for DynamoDB Stream events
+  TransactionDBUpdatesTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: TRANSACTION-DB-UPDATES-TOPIC
+
+  # SQS Queue for PENDING transactions
+  TransactionPendingEventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TransactionPendingEventsQueue
+      VisibilityTimeout: 30
+
+  # SQS Queue for PROCESSING transactions
+  TransactionProcessingEventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TransactionProcessingEventsQueue
+      VisibilityTimeout: 30
+
+  # SQS Queue Policy for SNS to send messages
+  TransactionPendingEventsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref TransactionPendingEventsQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt TransactionPendingEventsQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref TransactionDBUpdatesTopic
+
+  TransactionProcessingEventsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref TransactionProcessingEventsQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt TransactionProcessingEventsQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref TransactionDBUpdatesTopic
+
+  # SNS Subscription for PENDING status
+  TransactionPendingEventsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TransactionDBUpdatesTopic
+      Protocol: sqs
+      Endpoint: !GetAtt TransactionPendingEventsQueue.Arn
+      FilterPolicy:
+        status:
+          - "PENDING"
+      RawMessageDelivery: true
+
+  # SNS Subscription for PROCESSING status
+  TransactionProcessingEventsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref TransactionDBUpdatesTopic
+      Protocol: sqs
+      Endpoint: !GetAtt TransactionProcessingEventsQueue.Arn
+      FilterPolicy:
+        status:
+          - "PROCESSING"
+      RawMessageDelivery: true
+
+  # StreamPublisher Lambda: DynamoDB Stream -> SNS Topic
+  StreamPublisherFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/streamPublisher.ts
+    Properties:
+      Handler: streamPublisher.handler
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref TransactionDBUpdatesTopic
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetRecords
+                - dynamodb:GetShardIterator
+                - dynamodb:DescribeStream
+                - dynamodb:ListStreams
+              Resource: !GetAtt TransactionsTable.StreamArn
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref TransactionDBUpdatesTopic
+      Events:
+        DynamoDBStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt TransactionsTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 1
+
+  # Lambda: Handle PENDING events
+  HandlerTransactionPendingEvents:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/handlerTransactionPendingEvents.ts
+    Properties:
+      Handler: handlerTransactionPendingEvents.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt TransactionsTable.Arn
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt TransactionPendingEventsQueue.Arn
+            BatchSize: 1
+
+  # Lambda: Handle PROCESSING events
+  HandlerTransactionProcessingEvents:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: false
+        Target: es2022
+        Sourcemap: true
+        EntryPoints:
+          - src/handlerTransactionProcessingEvents.ts
+    Properties:
+      Handler: handlerTransactionProcessingEvents.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt TransactionsTable.Arn
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt TransactionProcessingEventsQueue.Arn
+            BatchSize: 1
 
 Outputs:
   ApiBaseUrl:
