@@ -67,6 +67,12 @@ function validateRequest(body: unknown): { data?: CreateTransactionRequest; erro
 }
 
 export async function handler(event: APIGatewayProxyEventV2) {
+  console.log("create_transaction_request_received", {
+    path: event.rawPath,
+    method: event.requestContext?.http?.method,
+    body: event.body,
+  });
+
   try {
     let body: unknown;
     try {
@@ -81,10 +87,24 @@ export async function handler(event: APIGatewayProxyEventV2) {
     }
 
     const { amount, currency, reference } = validation.data!;
+
+    console.log("create_transaction_validation_passed", {
+      amount,
+      currency,
+      reference,
+    });
+
+    const id = uuidv5(reference, NAMESPACE);
+
+    console.log("create_transaction_id_generated", {
+      reference,
+      id,
+    });
+
     const now = new Date().toISOString();
 
     const tx = {
-      id: uuidv5(reference, NAMESPACE),
+      id,
       reference,
       amount,
       currency,
@@ -92,6 +112,10 @@ export async function handler(event: APIGatewayProxyEventV2) {
       createdAt: now,
       updatedAt: now,
     };
+
+    console.log("create_transaction_dynamodb_put_attempt", {
+      transaction: tx,
+    });
 
     await ddbDoc.send(
       new PutCommand({
@@ -101,7 +125,11 @@ export async function handler(event: APIGatewayProxyEventV2) {
       })
     );
 
-    console.log("Transaction Created", JSON.stringify({ type: "TransactionCreated", payload: tx }));
+    console.log("create_transaction_success", {
+      id: tx.id,
+      reference: tx.reference,
+      status: tx.status,
+    });
 
     return json(201, {
       id: tx.id,
@@ -111,10 +139,22 @@ export async function handler(event: APIGatewayProxyEventV2) {
     });
   } catch (err: unknown) {
     if (err instanceof ConditionalCheckFailedException) {
+      const body = event.body ? JSON.parse(event.body) : {};
+      const reference = body.reference;
+      const id = reference ? uuidv5(reference, NAMESPACE) : undefined;
+
+      console.log("create_transaction_duplicate_detected", {
+        reference,
+        id,
+      });
+
       return json(409, { error: "Conflict", message: "Transaction already exists" });
     }
 
-    console.error("createTransaction error", err);
+    console.log("create_transaction_unexpected_error", {
+      error: err,
+    });
+
     return json(500, { error: "InternalError", message: "An unexpected error occurred" });
   }
 }

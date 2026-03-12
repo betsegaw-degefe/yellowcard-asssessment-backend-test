@@ -2,8 +2,9 @@ export default {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.ts'],
-  globals: {
-    'ts-jest': { useESM: true, tsconfig: 'tsconfig.json' }
+  transform: {
+    '^.+\\.ts$': ['ts-jest', { useESM: true, tsconfig: 'tsconfig.json' }],
   },
   testMatch: ['**/tests/**/*.test.ts'],
+  injectGlobals: true,
 };
