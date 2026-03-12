@@ -69,8 +69,12 @@ Resources:
     Properties:
       Handler: createTransaction.handler
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TransactionsTable
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt TransactionsTable.Arn
       Events:
         CreateTransaction:
           Type: Api
