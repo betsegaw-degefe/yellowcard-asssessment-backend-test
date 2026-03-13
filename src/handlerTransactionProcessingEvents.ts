@@ -4,14 +4,7 @@ import type { SQSEvent } from "aws-lambda";
 import { ddbDoc, TABLE_NAME, TransactionStatus, TransactionMessage } from "./shared";
 
 function determineOutcome(amount: number): "COMPLETED" | "FAILED" {
-  const amountStr = String(Math.abs(amount)).replace(/[^0-9]/g, "");
-  const firstDigit = parseInt(amountStr.charAt(0), 10);
-
-  if (isNaN(firstDigit)) {
-    return TransactionStatus.FAILED;
-  }
-
-  return firstDigit % 2 === 0
+  return Math.floor(amount) % 2 === 0
     ? TransactionStatus.COMPLETED
     : TransactionStatus.FAILED;
 }

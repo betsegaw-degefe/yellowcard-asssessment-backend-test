@@ -8,7 +8,12 @@ jest.unstable_mockModule("../src/shared", () => ({
     send: mockSend,
   },
   SNS_TOPIC_ARN: "arn:aws:sns:us-east-1:000000000000:TRANSACTION-DB-UPDATES-TOPIC",
-  PUBLISHABLE_STATUSES: ["PENDING", "PROCESSING"],
+  TransactionStatus: {
+    PENDING: "PENDING",
+    PROCESSING: "PROCESSING",
+    COMPLETED: "COMPLETED",
+    FAILED: "FAILED",
+  },
   TransactionMessage: {},
 }));
 
@@ -162,7 +167,9 @@ describe("streamPublisher", () => {
   });
 
   describe("status filtering", () => {
-    it("should NOT publish COMPLETED status events", async () => {
+    it("should publish COMPLETED status events", async () => {
+      mockSend.mockResolvedValueOnce({});
+
       const event = createDynamoDBStreamEvent([
         {
           eventName: "MODIFY",
@@ -179,10 +186,12 @@ describe("streamPublisher", () => {
 
       await handler(event);
 
-      expect(mockSend).not.toHaveBeenCalled();
+      expect(mockSend).toHaveBeenCalledTimes(1);
     });
 
-    it("should NOT publish FAILED status events", async () => {
+    it("should publish FAILED status events", async () => {
+      mockSend.mockResolvedValueOnce({});
+
       const event = createDynamoDBStreamEvent([
         {
           eventName: "MODIFY",
@@ -192,6 +201,26 @@ describe("streamPublisher", () => {
               status: { S: "FAILED" },
               amount: { N: "100" },
               reference: { S: "ref-failed" },
+            },
+          },
+        },
+      ]);
+
+      await handler(event);
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it("should NOT publish invalid status events", async () => {
+      const event = createDynamoDBStreamEvent([
+        {
+          eventName: "MODIFY",
+          dynamodb: {
+            NewImage: {
+              id: { S: "tx-invalid" },
+              status: { S: "INVALID_STATUS" },
+              amount: { N: "100" },
+              reference: { S: "ref-invalid" },
             },
           },
         },
@@ -293,7 +322,7 @@ describe("streamPublisher", () => {
       expect(mockSend).toHaveBeenCalledTimes(2);
     });
 
-    it("should only publish publishable statuses in mixed batch", async () => {
+    it("should publish all valid statuses in mixed batch", async () => {
       mockSend.mockResolvedValue({});
 
       const event = createDynamoDBStreamEvent([
@@ -334,7 +363,7 @@ describe("streamPublisher", () => {
 
       await handler(event);
 
-      expect(mockSend).toHaveBeenCalledTimes(2);
+      expect(mockSend).toHaveBeenCalledTimes(3);
     });
   });
 });

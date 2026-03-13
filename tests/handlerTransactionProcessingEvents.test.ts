@@ -46,8 +46,8 @@ describe("handlerTransactionProcessingEvents", () => {
     jest.clearAllMocks();
   });
 
-  describe("amount starting with even number -> COMPLETED", () => {
-    it("should mark transaction as COMPLETED when amount starts with 2", async () => {
+  describe("even amount -> COMPLETED", () => {
+    it("should mark transaction as COMPLETED when amount is even (200)", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createSQSEvent([
@@ -72,7 +72,7 @@ describe("handlerTransactionProcessingEvents", () => {
       expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("COMPLETED");
     });
 
-    it("should mark transaction as COMPLETED when amount starts with 4", async () => {
+    it("should mark transaction as COMPLETED when amount is even (456)", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createSQSEvent([
@@ -95,60 +95,14 @@ describe("handlerTransactionProcessingEvents", () => {
       expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("COMPLETED");
     });
 
-    it("should mark transaction as COMPLETED when amount starts with 6", async () => {
+    it("should mark transaction as COMPLETED when amount is 0", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createSQSEvent([
         {
           id: "tx-123",
           status: "PROCESSING",
-          amount: 678,
-          reference: "ref-123",
-        },
-      ]);
-
-      await handler(event);
-
-      const updateCommand = (mockSend.mock.calls as unknown[][])[0]?.[0] as {
-        input: {
-          ExpressionAttributeValues: Record<string, string>;
-        };
-      };
-
-      expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("COMPLETED");
-    });
-
-    it("should mark transaction as COMPLETED when amount starts with 8", async () => {
-      mockSend.mockResolvedValueOnce({});
-
-      const event = createSQSEvent([
-        {
-          id: "tx-123",
-          status: "PROCESSING",
-          amount: 890,
-          reference: "ref-123",
-        },
-      ]);
-
-      await handler(event);
-
-      const updateCommand = (mockSend.mock.calls as unknown[][])[0]?.[0] as {
-        input: {
-          ExpressionAttributeValues: Record<string, string>;
-        };
-      };
-
-      expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("COMPLETED");
-    });
-
-    it("should mark transaction as COMPLETED when amount starts with 0", async () => {
-      mockSend.mockResolvedValueOnce({});
-
-      const event = createSQSEvent([
-        {
-          id: "tx-123",
-          status: "PROCESSING",
-          amount: 0.50,
+          amount: 0,
           reference: "ref-123",
         },
       ]);
@@ -165,15 +119,15 @@ describe("handlerTransactionProcessingEvents", () => {
     });
   });
 
-  describe("amount starting with odd number -> FAILED", () => {
-    it("should mark transaction as FAILED when amount starts with 1", async () => {
+  describe("odd amount -> FAILED", () => {
+    it("should mark transaction as FAILED when amount is odd (101)", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createSQSEvent([
         {
           id: "tx-123",
           status: "PROCESSING",
-          amount: 100,
+          amount: 101,
           reference: "ref-123",
         },
       ]);
@@ -189,14 +143,14 @@ describe("handlerTransactionProcessingEvents", () => {
       expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("FAILED");
     });
 
-    it("should mark transaction as FAILED when amount starts with 3", async () => {
+    it("should mark transaction as FAILED when amount is odd (333)", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createSQSEvent([
         {
           id: "tx-123",
           status: "PROCESSING",
-          amount: 350,
+          amount: 333,
           reference: "ref-123",
         },
       ]);
@@ -212,53 +166,7 @@ describe("handlerTransactionProcessingEvents", () => {
       expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("FAILED");
     });
 
-    it("should mark transaction as FAILED when amount starts with 5", async () => {
-      mockSend.mockResolvedValueOnce({});
-
-      const event = createSQSEvent([
-        {
-          id: "tx-123",
-          status: "PROCESSING",
-          amount: 500,
-          reference: "ref-123",
-        },
-      ]);
-
-      await handler(event);
-
-      const updateCommand = (mockSend.mock.calls as unknown[][])[0]?.[0] as {
-        input: {
-          ExpressionAttributeValues: Record<string, string>;
-        };
-      };
-
-      expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("FAILED");
-    });
-
-    it("should mark transaction as FAILED when amount starts with 7", async () => {
-      mockSend.mockResolvedValueOnce({});
-
-      const event = createSQSEvent([
-        {
-          id: "tx-123",
-          status: "PROCESSING",
-          amount: 789,
-          reference: "ref-123",
-        },
-      ]);
-
-      await handler(event);
-
-      const updateCommand = (mockSend.mock.calls as unknown[][])[0]?.[0] as {
-        input: {
-          ExpressionAttributeValues: Record<string, string>;
-        };
-      };
-
-      expect(updateCommand.input.ExpressionAttributeValues[":newStatus"]).toBe("FAILED");
-    });
-
-    it("should mark transaction as FAILED when amount starts with 9", async () => {
+    it("should mark transaction as FAILED when amount is odd (999)", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createSQSEvent([

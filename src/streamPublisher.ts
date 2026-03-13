@@ -5,8 +5,8 @@ import type { AttributeValue } from "@aws-sdk/client-dynamodb";
 import {
   snsClient,
   SNS_TOPIC_ARN,
-  PUBLISHABLE_STATUSES,
   TransactionMessage,
+  TransactionStatus,
 } from "./shared";
 
 function extractTransactionFromRecord(record: DynamoDBRecord): TransactionMessage | null {
@@ -20,7 +20,7 @@ function extractTransactionFromRecord(record: DynamoDBRecord): TransactionMessag
 
   return {
     id: newImage.id,
-    status: newImage.status,
+    status: newImage.status as TransactionStatus,
     amount: newImage.amount,
     reference: newImage.reference,
   };
@@ -34,6 +34,7 @@ export async function handler(event: DynamoDBStreamEvent): Promise<void> {
         eventID: record.eventID,
       });
 
+      // why are we ignoreing te modify eventName? delete check?
       if (record.eventName !== "INSERT" && record.eventName !== "MODIFY") {
         continue;
       }
@@ -45,8 +46,8 @@ export async function handler(event: DynamoDBStreamEvent): Promise<void> {
         continue;
       }
 
-      if (!PUBLISHABLE_STATUSES.includes(transaction.status)) {
-        console.log("stream_event_status_not_publishable", {
+      if (!Object.values(TransactionStatus).includes(transaction.status)) {
+        console.log("stream_event_invalid_status", {
           id: transaction.id,
           status: transaction.status,
         });

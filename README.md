@@ -102,7 +102,7 @@ Content-Type: application/json
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `amount` | number | Yes | Transaction amount (must be positive) |
-| `currency` | string | No | Currency code (default: "USD") |
+| `currency` | string | Yes | Currency code (e.g., "USD", "EUR") |
 | `reference` | string | Yes | External reference identifier |
 
 **Success Response (201 Created):**
@@ -252,18 +252,18 @@ The system uses an event-driven approach for several benefits:
 - **Scalability:** Each component scales independently
 - **Reliability:** SQS provides message persistence and retry
 
-### Idempotent Transaction IDs
+### Idempotent Transaction Creation
 
-Transaction IDs are generated using **deterministic UUIDv5** based on the reference field:
+Transaction IDs are generated deterministically using the **required** `x-idempotency-key` header:
 
 ```typescript
-const id = uuidv5(reference, NAMESPACE);
+const id = uuidv5(idempotencyKey, uuidv5.DNS);
 ```
 
 This ensures:
-- **Idempotent creation:** Same reference always generates same ID
+- **Idempotent creation:** Same idempotency key always generates same ID
 - **Duplicate prevention:** `ConditionExpression: "attribute_not_exists(id)"` prevents duplicates
-- **Reference uniqueness:** Assumes each transaction reference is unique
+- **Client control:** Clients must provide unique keys per transaction
 
 ### Idempotent Lambda Handlers
 

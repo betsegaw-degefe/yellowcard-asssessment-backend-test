@@ -3,25 +3,18 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { SNSClient } from "@aws-sdk/client-sns";
 
 export const TABLE_NAME = process.env.TABLE_NAME ?? "transactions";
-export const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN ?? "";
+export const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN!;
 
-export const TransactionStatus = {
-  PENDING: "PENDING",
-  PROCESSING: "PROCESSING",
-  COMPLETED: "COMPLETED",
-  FAILED: "FAILED",
-} as const;
-
-export type TransactionStatusType = (typeof TransactionStatus)[keyof typeof TransactionStatus];
-
-export const PUBLISHABLE_STATUSES: readonly string[] = [
-  TransactionStatus.PENDING,
-  TransactionStatus.PROCESSING,
-];
+export enum TransactionStatus {
+  PENDING = "PENDING",
+  PROCESSING = "PROCESSING",
+  COMPLETED = "COMPLETED",
+  FAILED = "FAILED",
+}
 
 export interface TransactionMessage {
   id: string;
-  status: string;
+  status: TransactionStatus;
   amount: number;
   reference: string;
 }

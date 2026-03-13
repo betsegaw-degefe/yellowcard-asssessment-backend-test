@@ -4,11 +4,10 @@ import { v5 as uuidv5 } from "uuid";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { ddbDoc, TABLE_NAME, json, TransactionStatus } from "./shared";
 
-const NAMESPACE = "a5b1c9d2-4e6a-4a7c-bc1d-8c2f5a0b3d44";
 
 interface CreateTransactionRequest {
   amount: number;
-  currency?: string;
+  currency: string;
   reference: string;
 }
 
@@ -40,10 +39,10 @@ function validateRequest(body: unknown): { data?: CreateTransactionRequest; erro
     errors.push({ field: "reference", message: "reference must be a non-empty string" });
   }
 
-  if (currency !== undefined && currency !== null) {
-    if (typeof currency !== "string" || currency.trim() === "") {
-      errors.push({ field: "currency", message: "currency must be a non-empty string" });
-    }
+  if (currency === undefined || currency === null) {
+    errors.push({ field: "currency", message: "currency is required" });
+  } else if (typeof currency !== "string" || currency.trim() === "") {
+    errors.push({ field: "currency", message: "currency must be a non-empty string" });
   }
 
   if (errors.length > 0) {
@@ -53,7 +52,7 @@ function validateRequest(body: unknown): { data?: CreateTransactionRequest; erro
   return {
     data: {
       amount: amount as number,
-      currency: (currency as string) || "USD",
+      currency: (currency as string),
       reference: (reference as string).trim(),
     },
   };
@@ -87,7 +86,19 @@ export async function handler(event: APIGatewayProxyEventV2) {
       reference,
     });
 
-    const id = uuidv5(reference, NAMESPACE);
+    // Extract idempotency key from headers for deterministic ID generation
+    const idempotencyKey =
+      event.headers?.["x-idempotency-key"] ||
+      event.headers?.["X-Idempotency-Key"];
+
+    if (!idempotencyKey) {
+      return json(400, {
+        error: "ValidationError",
+        message: "x-idempotency-key header is required",
+      });
+    }
+
+    const id = uuidv5(idempotencyKey, uuidv5.DNS);
 
     console.log("create_transaction_id_generated", {
       reference,
@@ -127,13 +138,8 @@ export async function handler(event: APIGatewayProxyEventV2) {
     return json(201, tx);
   } catch (err: unknown) {
     if (err instanceof ConditionalCheckFailedException) {
-      const body = event.body ? JSON.parse(event.body) : {};
-      const reference = body.reference;
-      const id = reference ? uuidv5(reference, NAMESPACE) : undefined;
-
       console.log("create_transaction_duplicate_detected", {
-        reference,
-        id,
+        idempotencyKey: event.headers?.["x-idempotency-key"] || event.headers?.["X-Idempotency-Key"],
       });
 
       return json(409, { error: "Conflict", message: "Transaction already exists" });

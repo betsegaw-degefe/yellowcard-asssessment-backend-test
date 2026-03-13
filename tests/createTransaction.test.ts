@@ -29,7 +29,7 @@ jest.unstable_mockModule("../src/shared", () => ({
 
 const { handler } = await import("../src/createTransaction");
 
-function createEvent(body: object | null): APIGatewayProxyEventV2 {
+function createEvent(body: object | null, idempotencyKey?: string): APIGatewayProxyEventV2 {
   return {
     body: body ? JSON.stringify(body) : null,
     rawPath: "/transactions",
@@ -54,6 +54,7 @@ function createEvent(body: object | null): APIGatewayProxyEventV2 {
     },
     headers: {
       "content-type": "application/json",
+      ...(idempotencyKey && { "x-idempotency-key": idempotencyKey }),
     },
     isBase64Encoded: false,
     routeKey: "POST /transactions",
@@ -74,7 +75,7 @@ describe("createTransaction handler", () => {
         amount: 100,
         currency: "USD",
         reference: "external-tx-123",
-      });
+      }, "idempotency-key-123");
 
       const response = await handler(event);
 
@@ -90,30 +91,32 @@ describe("createTransaction handler", () => {
       expect(body.updatedAt).toBeDefined();
     });
 
-    it("should default currency to USD when not provided", async () => {
+    it("should create transaction with all required fields", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event = createEvent({
-        amount: 50,
-        reference: "external-tx-456",
-      });
+        amount: 100,
+        currency: "EUR",
+        reference: "test-reference",
+      }, "idempotency-key-456");
 
       const response = await handler(event);
+      const body = JSON.parse(response.body);
 
       expect(response.statusCode).toBe(201);
-      expect(mockSend).toHaveBeenCalledTimes(1);
-
-      const putCommandArg = (mockSend.mock.calls as unknown[][])[0]?.[0] as { input: { Item: { currency: string } } };
-      expect(putCommandArg?.input?.Item?.currency).toBe("USD");
+      expect(body.currency).toBe("EUR");
+      expect(body.amount).toBe(100);
+      expect(body.reference).toBe("test-reference");
     });
 
-    it("should generate deterministic UUID from reference", async () => {
+    it("should generate deterministic ID when same x-idempotency-key is used", async () => {
       mockSend.mockResolvedValueOnce({});
 
       const event1 = createEvent({
         amount: 100,
-        reference: "same-reference",
-      });
+        currency: "USD",
+        reference: "ref-1",
+      }, "same-key-123");
 
       const response1 = await handler(event1);
       const body1 = JSON.parse(response1.body);
@@ -122,13 +125,30 @@ describe("createTransaction handler", () => {
 
       const event2 = createEvent({
         amount: 200,
-        reference: "same-reference",
-      });
+        currency: "EUR",
+        reference: "ref-2",
+      }, "same-key-123");
 
       const response2 = await handler(event2);
       const body2 = JSON.parse(response2.body);
 
       expect(body1.id).toBe(body2.id);
+    });
+
+    it("should return HTTP 400 when x-idempotency-key header is missing", async () => {
+      const event = createEvent({
+        amount: 100,
+        currency: "USD",
+        reference: "ref-1",
+      });
+
+      const response = await handler(event);
+
+      expect(response.statusCode).toBe(400);
+
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe("ValidationError");
+      expect(body.message).toBe("x-idempotency-key header is required");
     });
   });
 
@@ -226,7 +246,7 @@ describe("createTransaction handler", () => {
         amount: 100,
         currency: "USD",
         reference: "duplicate-tx-123",
-      });
+      }, "duplicate-idempotency-key");
 
       const response = await handler(event);
 
@@ -246,7 +266,7 @@ describe("createTransaction handler", () => {
         amount: 100,
         currency: "USD",
         reference: "external-tx-123",
-      });
+      }, "error-idempotency-key");
 
       const response = await handler(event);
 
